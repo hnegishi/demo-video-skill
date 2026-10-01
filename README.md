@@ -12,6 +12,35 @@
 
 テロップ・タイトル・強調枠・吹き出し・クリックエフェクト・ズームは、録画した後に Pillow で焼き込みます。置き場所と下地の色は実際の映像を見て自動で決め、コンテンツや強調対象には重ねません。日本語は OS に標準で入っているフォントで描きます。
 
+## サンプル
+
+このスキルで作った動画です。どれも Claude Code に一言頼むだけで、録画・テロップ・ズーム・確認までを自動で行っています。題材は `evals/files/` にあります。
+
+<!--
+  動画の差し込み方:
+  1. GitHub でこのファイルの編集画面を開き、MP4 を本文のどこかにドラッグ＆ドロップする
+  2. 挿入された https://github.com/user-attachments/assets/... の URL を切り取り、
+     下の VIDEO_URL_WEB / VIDEO_URL_CLI / VIDEO_URL_MOTION と置き換える
+-->
+
+<table>
+  <tr>
+    <th width="33%">Web アプリの操作録画</th>
+    <th width="33%">CLI の録画</th>
+    <th width="33%">仕組みの説明（モーション動画）</th>
+  </tr>
+  <tr>
+    <td><video src="VIDEO_URL_WEB" controls muted playsinline width="100%"></video></td>
+    <td><video src="VIDEO_URL_CLI" controls muted playsinline width="100%"></video></td>
+    <td><video src="VIDEO_URL_MOTION" controls muted playsinline width="100%"></video></td>
+  </tr>
+  <tr>
+    <td valign="top">「タスク管理アプリに付けた完了フィルタの動きを PR に貼りたい」。入力欄へのズーム、クリックエフェクト、吹き出し、強調枠入り（24 秒）</td>
+    <td valign="top">「CSV の統計を出す CLI の使い方を README に載せたい」。暗い端末ではテロップの下地が自動で明るくなる（21 秒）</td>
+    <td valign="top">「UI のないレート制限ライブラリの動きを勉強会で説明したい」。画面の数値は実装と同じ計算式で算出（30 秒）</td>
+  </tr>
+</table>
+
 ## インストール
 
 Claude Code で、このリポジトリをマーケットプレイスとして追加し、プラグインを入れます。
