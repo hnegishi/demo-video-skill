@@ -220,19 +220,21 @@ function makeDemo(page, state) {
       closeCaption(now());
     },
     // Red outline around an element (coordinates captured now; don't scroll while it's shown).
+    // ms: how long it shows and how long to wait; ms = 0 doesn't wait (it still shows for 1.5 s)
     async box(target, { label, ms = 1500, pad } = {}) {
       const box = await unionBox(target);
       const t = now();
-      state.annotations.push({ type: 'box', start: t, end: t + ms / 1000, label, pad,
+      state.annotations.push({ type: 'box', start: t, end: t + (ms || 1500) / 1000, label, pad,
         x: Math.round(box.x), y: Math.round(box.y), w: Math.round(box.width), h: Math.round(box.height) });
-      await page.waitForTimeout(ms);
+      if (ms) await page.waitForTimeout(ms);
     },
     // Speech-bubble note about an element; annotate.py places it beside the element, never on it.
+    // ms = 0 doesn't wait (it still shows for 2 s)
     async callout(target, text, { ms = 2000 } = {}) {
       const box = await unionBox(target);
       const t = now();
-      state.annotations.push({ type: 'callout', start: t, end: t + ms / 1000, text, ...rect(box) });
-      await page.waitForTimeout(ms);
+      state.annotations.push({ type: 'callout', start: t, end: t + (ms || 2000) / 1000, text, ...rect(box) });
+      if (ms) await page.waitForTimeout(ms);
     },
     // Smoothly zoom the camera onto an element (or several: pass an array) and keep it there until
     // zoomOut() or the next zoomTo(). Waits for the zoom-in to finish. Keep the cursor's moves
@@ -418,8 +420,12 @@ else if (flashVideoT === null && state.startAt) {
 }
 trim = Math.max(0, trim);
 fs.mkdirSync(path.dirname(path.resolve(args.out)), { recursive: true });
-// keep instant / open-ended items (clicks, narration, unclosed captions); drop zero-length ones
+// keep instant / open-ended items (clicks, narration, unclosed captions); drop zero-length ones, and say so
 const annotations = state.annotations.filter((a) => a.end == null || a.end > a.start);
+for (const a of state.annotations.filter((x) => !annotations.includes(x))) {
+  console.error(`[record_web] warning: ${a.type} "${String(a.text ?? a.label ?? '').slice(0, 16)}" at ${a.start.toFixed(2)}s ` +
+    'has no display time (ms: 0?); dropped');
+}
 const base = args.out.replace(/\.\w+$/, '');
 const plain = annotations.length ? `${base}.plain.mp4` : args.out;
 execFileSync('ffmpeg', [

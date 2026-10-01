@@ -1019,6 +1019,9 @@ def build_layers(items, W, H, dur, scene, zoom):
                 continue
             end = min(end, outro)   # the end card takes over the whole screen
         if end <= start:
+            if t != "title" or not CANVAS:
+                print(f"[annotate] warning: {t} '{str(it.get('text') or it.get('label') or '')[:16]}' at {start:.2f}s "
+                      f"has no display time (end <= start); skipped", file=sys.stderr)
             continue
         norm.append((it, t, start, end))
         if t in ("box", "callout") and "w" in it:
@@ -2191,6 +2194,12 @@ def compose(buf, t, W, H, u, zoom, video_layers, screen_layers):
     return frame.convert("RGB").tobytes()
 
 
+def count_items(items):
+    """Annotations as written in annotations.json (camera / sound items aside), not drawing layers."""
+    return sum(1 for i in items if i.get("type", "caption") not in ("zoom", "shake", "narration", "flash")
+               and not (i.get("end") is not None and float(i["end"]) <= float(i.get("start", 0))))
+
+
 def check(src, items, layers, warnings, notes, W, H, fps, dur, zoom, sheet_path):
     """--check: report placement problems and render a contact sheet of every annotation at its
     midpoint (plus zoom/band moments) without encoding the video."""
@@ -2229,7 +2238,8 @@ def check(src, items, layers, warnings, notes, W, H, fps, dur, zoom, sheet_path)
         frame = frame.resize((480, round(480 * frame.height / frame.width)))
         tile = Image.new("RGB", (frame.width, frame.height + 26), (0, 0, 0))
         tile.paste(frame, (0, 26))
-        active = [l.item.get("text") or l.item.get("label") or l.item.get("type") for l in layers if l.start <= t < l.end]
+        active = list(dict.fromkeys(l.item.get("text") or l.item.get("label") or l.item.get("type")
+                                    for l in layers if l.start <= t < l.end))   # a box label is one item
         ImageDraw.Draw(tile).text((6, 2), f"{t:.2f}s  " + " / ".join(str(a)[:14] for a in active)[:60],
                                   font=font, fill=(255, 255, 255))
         tiles.append(tile)
@@ -2246,7 +2256,7 @@ def check(src, items, layers, warnings, notes, W, H, fps, dur, zoom, sheet_path)
     extra = ""
     if CANVAS:
         extra = f", composition {CANVAS['comp']}, {len(CANVAS.get('over', []))} on the picture"
-    print(f"[annotate] check: {len(layers)} annotations, {len(notes)} caption bands, {len(warnings)} warnings, "
+    print(f"[annotate] check: {count_items(items)} annotations, {len(notes)} caption bands, {len(warnings)} warnings, "
           f"{len(hints)} hints{extra}; preview {sheet_path}")
 
 
@@ -2312,7 +2322,7 @@ def main():
     enc.stdin.close()
     if enc.wait() != 0:
         sys.exit("ffmpeg failed")
-    print(f"[annotate] wrote {dst} ({n} frames, {len(layers)} annotations, "
+    print(f"[annotate] wrote {dst} ({n} frames, {count_items(items)} annotations, "
           f"{sum(1 for i in items if i.get('type') == 'zoom')} zooms, {len(notes)} caption bands, "
           f"{len(warnings)} warnings)")
 

@@ -69,11 +69,10 @@ export default async ({ page, demo }) => {
 | `demo.moveTo(x, y, ms)` | 座標を指定してカーソルを移動する |
 | `demo.caption(text, ms, {position, entrance, idle})` | テロップを出し、`ms` だけ待つ（`ms=0` なら待たずに次へ）。次の `caption` か `hideCaption` まで表示される。置き場所は空いている所に自動で決まる（下部中央を優先）。`{position: 'top'}` などで固定もできる。`entrance`（`fade`・`pop`・`slide`・`type`）と `idle`（`none`・`float`・`pulse`・`wiggle`）で出方と動きを指定できる。縦長では `position`（`above`・`below`・`over`＝映像の上に重ねる）と `align`（`left`・`center`・`right`）、`tilt`（度）でこの 1 本だけ置き方を変えられる。`avoid`（要素）を渡すと、映像に重ねるときにその要素を隠さない。`**強調**` は色が変わり、絵文字はカラーで描かれる |
 | `demo.hideCaption()` | テロップを消す |
-| `demo.title(text, {sub, ms})` | 画面を暗くして中央に大きなタイトルを出す |
-| `demo.box(target, {label, ms})` | 要素を赤枠で囲む（ラベル付き可）。配列を渡すと全体を囲む（例: 表示中の行だけ `await page.locator('li').all()`。`all()` は Promise を返すので `await` が要る） |
-| `demo.callout(target, text, {ms})` | 要素の横の空いた場所に吹き出しを出す。配列も可 |
+| `demo.title(text, {sub, ms, badge})` | 画面を暗くして中央に大きなタイトルを出す。`badge`（小さなバッジ）はドパガキ仕様の縦長でだけ使われる |
+| `demo.box(target, {label, ms})` | 要素を赤枠で囲む（ラベル付き可）。配列を渡すと全体を囲む（例: 表示中の行だけ `await page.locator('li').all()`。`all()` は Promise を返すので `await` が要る）。枠は要素から少し外側に描かれる（`pad`）。`ms` だけ表示してその間待つ。`ms: 0` なら待たずに次へ進み、表示は 1.5 秒 |
+| `demo.callout(target, text, {ms})` | 要素の横の空いた場所に吹き出しを出す。配列も可。`ms` だけ表示してその間待つ。`ms: 0` なら待たずに次へ進み、表示は 2 秒 |
 | `demo.shake({amplitude, ms})` | 画面を一瞬揺らす。酔いやすいので 1 本で 1〜2 回まで |
-| `demo.title(text, {sub, ms, badge})` の `badge` | 冒頭のタイトルに付ける小さなバッジ。ドパガキ仕様の縦長でだけ使われる |
 | `demo.chapter(text)` | 章のバッジ（「① ホーム」など）を出す。次の章まで残る |
 | `demo.outro(text, {sub, ms})` | 締めのカード。画面が暗くなり、締めの一言と補足が最後まで出る |
 | `demo.stamp(text, {ms, angle})` | 大きな傾いた文字を要所で弾ませて出す（約 1.2 秒）。縦長では映像の下に出る |

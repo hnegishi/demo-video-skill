@@ -11,7 +11,6 @@ Markers (each is an ordinary tape comment, so VHS ignores it):
                                  Vertical layout: ":above" / ":below" / ":over" (on a free spot of
                                  the picture) and ":left" / ":right" / ":center" place this caption.
                                  **text** is emphasized; emoji are drawn in color.
-                                 the next caption/title or @end
     # @caption-top テキスト      same, pinned to the top
     # @title タイトル | サブ     full-screen title card; stays until the next caption/title or @end
     # @box X Y W H ラベル        red outline around a pixel rect (label optional); until next @box or @end
