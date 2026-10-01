@@ -10,7 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-SKILL_SCRIPTS = Path(__file__).resolve().parent.parent / "demo-video" / "scripts"
+SKILL_SCRIPTS = Path(__file__).resolve().parent.parent / "demo-video" / "skills" / "demo-video" / "scripts"
 DURATION = {1: (8, 60), 2: (8, 60), 3: (18, 35)}
 SCRIPT_EXT = {1: {".mjs", ".js", ".ts", ".py", ".sh"}, 2: {".tape", ".sh", ".py", ".cast"}, 3: {".html", ".mjs", ".js", ".py"}}
 

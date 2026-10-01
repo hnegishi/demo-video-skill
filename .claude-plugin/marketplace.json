@@ -1,0 +1,17 @@
+{
+  "name": "demo-video-skill",
+  "owner": {
+    "name": "hnegishi"
+  },
+  "metadata": {
+    "description": "ソフトウェアのデモ動画を作る Claude Code プラグイン"
+  },
+  "plugins": [
+    {
+      "name": "demo-video",
+      "source": "./demo-video",
+      "description": "ソフトウェアのデモ動画（MP4/GIF）を作るスキル。Web・CLI・UI のない仕組みの 3 方式に対応。",
+      "version": "0.1.0"
+    }
+  ]
+}
