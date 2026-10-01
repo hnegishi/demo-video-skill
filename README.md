@@ -30,14 +30,9 @@
     <th width="33%">仕組みの説明（モーション動画）</th>
   </tr>
   <tr>
-    <td><video src="VIDEO_URL_WEB" controls muted playsinline width="100%"></video></td>
-    <td><video src="VIDEO_URL_CLI" controls muted playsinline width="100%"></video></td>
-    <td><video src="VIDEO_URL_MOTION" controls muted playsinline width="100%"></video></td>
-  </tr>
-  <tr>
-    <td valign="top">「タスク管理アプリに付けた完了フィルタの動きを PR に貼りたい」。入力欄へのズーム、クリックエフェクト、吹き出し、強調枠入り（24 秒）</td>
-    <td valign="top">「CSV の統計を出す CLI の使い方を README に載せたい」。暗い端末ではテロップの下地が自動で明るくなる（21 秒）</td>
-    <td valign="top">「UI のないレート制限ライブラリの動きを勉強会で説明したい」。画面の数値は実装と同じ計算式で算出（30 秒）</td>
+    <td><video src=https://github.com/user-attachments/assets/0772ca97-b38a-4843-af45-11208c868195 controls muted playsinline width="100%"></video></td>
+    <td><video src=https://github.com/user-attachments/assets/b990cb11-9df8-4a5b-aef9-8be9041fcb47 controls muted playsinline width="100%"></video></td>
+    <td><video src=https://github.com/user-attachments/assets/27444de0-a19c-47fe-979f-e122a188ae7b controls muted playsinline width="100%"></video></td>
   </tr>
 </table>
 
