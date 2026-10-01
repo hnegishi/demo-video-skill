@@ -163,6 +163,7 @@ def main():
     ap.add_argument("--burn", action="store_true", help="run annotate.py on the tape's Output video")
     ap.add_argument("--video", help="input video (default: the tape's first non-GIF Output)")
     ap.add_argument("--out", help="annotated output (default: Output with .plain removed)")
+    ap.add_argument("--style", help="style JSON (look & feel overrides) to store in annotations.json")
     ap.add_argument("--check", action="store_true",
                     help="with --burn: only check placement and write a preview sheet (no encoding)")
     a = ap.parse_args()
@@ -182,6 +183,8 @@ def main():
     if out == video:
         sys.exit("output would overwrite input; name the tape Output like demo.plain.mp4 or pass --out")
     ann = out.with_suffix(".annotations.json")
+    if a.style:
+        spec = {"style": json.loads(Path(a.style).read_text()), **spec}
     ann.write_text(json.dumps(spec, ensure_ascii=False, indent=2))
     cmd = [sys.executable, str(Path(__file__).with_name("annotate.py")), str(video), str(ann)]
     subprocess.run(cmd + (["--check"] if a.check else [str(out)]), check=True)

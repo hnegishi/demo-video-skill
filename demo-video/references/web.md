@@ -11,7 +11,7 @@
    ```bash
    node <skill>/scripts/record_web.mjs demo.scenario.mjs --out docs/demo/feature.mp4
    ```
-   オプション: `--width 1280 --height 720`、`--keep-webm`（元の WebM も残す）
+   オプション: `--width 1280 --height 720`、`--keep-webm`（元の WebM も残す）、`--style style.json`（見た目の上書き。SKILL.md の「見た目は既定値」）
    シナリオが例外で止まった場合は、`<out>.error.png` にその時点の画面が保存され、終了コード 1 で終わる。
 
    注釈を 1 つでも使うと、次の 3 つが出力される。
@@ -78,7 +78,9 @@ export default async ({ page, demo }) => {
 注釈と演出（`caption` / `title` / `box` / `callout` / クリックエフェクト / ズーム）はページには描かれない。呼んだ時刻と要素の座標が記録され、録画後に Pillow で焼き込まれる。置き場所と色は `annotate.py` が映像を見て決めるので、シナリオで位置を指定する必要はない（SKILL.md の「注釈と演出」）。気をつけること:
 - `box`・`callout`・`zoomTo` の座標は呼んだ瞬間のもの。表示中にスクロールやレイアウト変更をすると枠がずれる。レイアウトが変わる操作の直後は `demo.pause(300)` を挟んでから呼ぶ。
 - ズーム中は、ズーム範囲の外へカーソルを動かさない。範囲外の要素を操作するなら、先に `zoomOut()` する。
-- ページ内で `document.body.style.zoom` を使っても座標は正しく取れる（確認済み）。`page` は通常の Playwright Page なので、スクロール（`page.mouse.wheel`）、キー操作（`page.keyboard.press`）、ページ遷移の待機はそのまま書ける。
+- ページ内で `document.body.style.zoom` を使っても座標は正しく取れる（確認済み）。
+
+`page` は通常の Playwright Page なので、スクロール（`page.mouse.wheel`）、キー操作（`page.keyboard.press`）、ページ遷移の待機はそのまま書ける。
 
 ## 見やすくするコツ
 

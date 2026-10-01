@@ -3,7 +3,7 @@
 //
 // Usage:
 //   node record_web.mjs <scenario.mjs | page.html> --out demo.mp4 [--width 1280] [--height 720]
-//                       [--duration 60] [--keep-webm]
+//                       [--duration 60] [--keep-webm] [--style style.json]
 //
 // scenario.mjs must `export default async function ({ page, demo }) { ... }`.
 // page.html (motion mode) is opened and recorded until window.__demoDone === true
@@ -57,6 +57,7 @@ function parseArgs(argv) {
     else if (a === '--height') args.height = Number(argv[++i]);
     else if (a === '--duration') args.duration = Number(argv[++i]);
     else if (a === '--keep-webm') args.keepWebm = true;
+    else if (a === '--style') args.style = argv[++i];
     else rest.push(a);
   }
   args.input = rest[0];
@@ -339,7 +340,10 @@ if (annotations.length) {
   //   python3 annotate.py <base>.plain.mp4 <base>.annotations.json <out>
   const annPath = `${base}.annotations.json`;
   const round = (v) => (v === null ? null : Math.round(v * 100) / 100);
+  // look & feel overrides (click effect, accent, corner radius...) travel with the annotations
+  const style = args.style ? JSON.parse(fs.readFileSync(args.style, 'utf8')) : undefined;
   fs.writeFileSync(annPath, JSON.stringify({
+    ...(style ? { style } : {}),
     items: annotations.map((a) => ({ ...a, start: round(Math.max(0, a.start)), end: round(a.end ?? null) })),
   }, null, 2));
   const annotate = path.join(path.dirname(fileURLToPath(import.meta.url)), 'annotate.py');

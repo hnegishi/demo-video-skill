@@ -5,6 +5,8 @@ Usage:
     python3 annotate.py in.mp4 annotations.json out.mp4
     python3 annotate.py in.mp4 annotations.json --check [preview.png]
 
+    python3 annotate.py --default-style                 # print the default look & feel
+
 --check does everything except encoding (a few seconds): prints placement warnings, caption-band
 notes and reading-time hints, and writes a contact sheet showing every annotation at its midpoint
 (default <annotations>.check.png). Use it to iterate on wording/timing before the real burn.
@@ -36,6 +38,11 @@ Coordinates are input-video pixels; times are seconds; "end" may be omitted (= e
            The rect is expanded to the video's aspect ratio. "ease" (default 0.6s) sets the
            transition length. Consecutive zooms pan directly from one rect to the next.
 
+Look & feel (click effect, accent color, corner radius, sizes, plate colors) are defaults only:
+override them per video with "style": {...} next to "items" in annotations.json, or for a whole
+project/user with a JSON file named by $DEMO_VIDEO_STYLE. Example:
+    {"style": {"click": {"style": "disc", "color": [255, 196, 0]}, "corner_radius": 3}, "items": [...]}
+
 Readability rules applied automatically:
   - Colors: each annotation measures the brightness of the picture under it and uses a dark
     plate on bright footage, a light plate on dark footage (so plates never blend into the video).
@@ -51,6 +58,7 @@ Text uses an OS-bundled Japanese font (jpfont.py). Sizes scale with frame height
 Pipeline: ffmpeg -> raw RGB -> Pillow -> ffmpeg (H.264); audio is copied.
 """
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -60,18 +68,69 @@ from PIL import Image, ImageDraw, ImageFilter, ImageStat
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from jpfont import load_font  # noqa: E402
 
-ACCENT = (255, 72, 72, 255)
-FADE = 0.2
-CLICK_DUR = 0.5
-CLICK_FILL = (255, 255, 255)  # click effect: thin white ring that expands and fades
-CORNER = 6                    # corner radius of plates/boxes at 720p (small: reads as a label, not a pill)
+# Look & feel. These are only defaults: override any key with a style JSON in
+# $DEMO_VIDEO_STYLE (project/personal taste) and/or "style" in annotations.json (one video).
+# Sizes are pixels at 720p and scale with the video height.
+DEFAULT_STYLE = {
+    "accent": [255, 72, 72],          # box outline, box label, callout border/stem
+    "corner_radius": 6,               # plates, labels, boxes (small: reads as a label, not a pill)
+    "fade": 0.2,                      # fade in/out of captions, boxes, callouts (s)
+    "caption_size": 30,
+    "callout_size": 24,
+    "title_size": 60,
+    "title_dim": 0.85,                # darkness of the title card backdrop (0..1)
+    "plate_dark": {"bg": [18, 22, 34, 232], "fg": [255, 255, 255]},   # used over bright footage
+    "plate_light": {"bg": [250, 250, 252, 240], "fg": [20, 22, 30]},  # used over dark footage
+    "click": {
+        "style": "ring",              # "ring" (expanding ring) | "disc" (pressed dot) | "none"
+        "color": [255, 255, 255],
+        "opacity": 0.92,
+        "duration": 0.5,              # s
+        "radius_from": 6,             # ring: start radius; disc: radius
+        "radius_to": 36,              # ring: end radius
+        "width": 2,                   # ring stroke
+        "shadow": True,               # faint dark edge so a white effect stays visible on white UIs
+    },
+}
+STYLE = json.loads(json.dumps(DEFAULT_STYLE))
+
+
+def merge_style(base, over):
+    for k, v in (over or {}).items():
+        if isinstance(v, dict) and isinstance(base.get(k), dict):
+            merge_style(base[k], v)
+        elif k in base:
+            base[k] = v
+        else:
+            print(f"[annotate] warning: unknown style key '{k}' ignored", file=sys.stderr)
+    return base
+
+
+def load_style(spec_style, use_env=True):
+    """defaults <- $DEMO_VIDEO_STYLE file <- annotations.json "style"; refreshes the globals below."""
+    global STYLE, ACCENT, FADE, CLICK_DUR, CORNER, DARK_PLATE, LIGHT_PLATE
+    STYLE = json.loads(json.dumps(DEFAULT_STYLE))
+    env = os.environ.get("DEMO_VIDEO_STYLE") if use_env else None
+    if env:
+        merge_style(STYLE, json.loads(Path(env).read_text()))
+    merge_style(STYLE, spec_style)
+    ACCENT = tuple(STYLE["accent"][:3]) + (255,)
+    FADE = float(STYLE["fade"])
+    CLICK_DUR = float(STYLE["click"]["duration"])
+    CORNER = float(STYLE["corner_radius"])
+    pd, pl = STYLE["plate_dark"], STYLE["plate_light"]
+    rgba = lambda c, a=255: tuple(c[:3]) + ((c[3],) if len(c) > 3 else (a,))
+    DARK_PLATE = (rgba(pd["bg"]), rgba(pd["fg"]), (255, 255, 255, 70))
+    LIGHT_PLATE = (rgba(pl["bg"]), rgba(pl["fg"]), (0, 0, 0, 60))
+
+
+ACCENT = FADE = CLICK_DUR = CORNER = DARK_PLATE = LIGHT_PLATE = None
 SAMPLE_FPS = 4
 SAMPLE_DIV = 4          # layout analysis runs on 1/4-size frames
 BUSY_LIMIT = 0.8        # % of edge pixels (incl. 24px margin) above which a spot is "not free"
 WARN_LIMIT = 12.0       # above this the annotation really sits on content, not just inside the margin
 
-DARK_PLATE = ((18, 22, 34, 232), (255, 255, 255, 255), (255, 255, 255, 70))
-LIGHT_PLATE = ((250, 250, 252, 240), (20, 22, 30, 255), (0, 0, 0, 60))
+load_style({}, use_env=False)  # plain defaults until main() reads the env/spec styles
 
 
 # ---------------------------------------------------------------- video io
@@ -497,9 +556,9 @@ def build_layers(items, W, H, dur, scene, zoom):
 
 
 def render_title(it, W, H, u):
-    big = load_font(it.get("size", 60) * u, bold=True)
+    big = load_font(it.get("size", STYLE["title_size"]) * u, bold=True)
     small = load_font(it.get("sub_size", 28) * u, bold=False)
-    im = Image.new("RGBA", (W, H), (10, 14, 28, int(255 * it.get("dim", 0.85))))
+    im = Image.new("RGBA", (W, H), (10, 14, 28, int(255 * it.get("dim", STYLE["title_dim"]))))
     d = ImageDraw.Draw(im)
     tl = wrap(it["text"], big, W * 0.85)
     sl = wrap(it.get("sub", ""), small, W * 0.85) if it.get("sub") else []
@@ -514,7 +573,7 @@ def render_title(it, W, H, u):
 
 
 def render_caption(it, W, H, u, layout, t0, t1):
-    font = load_font(it.get("size", 30) * u, bold=True)
+    font = load_font(it.get("size", STYLE["caption_size"]) * u, bold=True)
     lines = wrap(it["text"], font, W * 0.78)
     probe_im = plate(lines, font, int(28 * u), int(14 * u), int(6 * u), DARK_PLATE)
     w, h = probe_im.size
@@ -593,7 +652,7 @@ def render_box(it, u, layout, t0, t1):
 def render_callout(it, u, layout, t0, t1):
     tx, ty = it["x"], it["y"]
     tw, th = it.get("w", 0), it.get("h", 0)
-    font = load_font(it.get("size", 24) * u, bold=True)
+    font = load_font(it.get("size", STYLE["callout_size"]) * u, bold=True)
     lines = wrap(it["text"], font, layout.W * 0.35)
     probe_im = plate(lines, font, int(18 * u), int(10 * u), int(4 * u), DARK_PLATE, radius=max(2, int(CORNER * u)))
     bw, bh = probe_im.size
@@ -643,28 +702,37 @@ def render_callout(it, u, layout, t0, t1):
 
 
 def draw_click(frame, L, t, u):
-    """Thin white ring centered on the click that expands (fast, then easing out) and fades.
-    No fill, so whatever was clicked stays fully visible. A faint dark edge keeps the ring
-    readable on white UIs, where plain white would vanish."""
+    """Click effect, per STYLE["click"]. Default "ring": a thin white ring centered on the click that
+    expands (fast, then easing out) and fades; no fill, so whatever was clicked stays visible, and a
+    faint dark edge keeps it readable on white UIs. "disc": a translucent dot that presses and fades."""
+    c = STYLE["click"]
     dt = t - L.start
-    if not 0 <= dt < CLICK_DUR:
+    if c["style"] == "none" or not 0 <= dt < CLICK_DUR:
         return
     q = dt / CLICK_DUR
-    grow = 1 - (1 - q) ** 3                          # ease-out: quick burst, then settles
-    r = (6 + 30 * grow) * u
-    a = 1 - q                                        # fades linearly to nothing
-    w = max(1.0, 2 * u)
+    color = tuple(c["color"][:3])
+    a = (1 - q) * float(c["opacity"])               # fades linearly to nothing
+    if c["style"] == "disc":
+        r = float(c["radius_from"]) * u * (1 - 0.15 * smooth(min(1, q * 3)))   # slight press
+    else:
+        r = (float(c["radius_from"]) + (float(c["radius_to"]) - float(c["radius_from"])) * (1 - (1 - q) ** 3)) * u
+    w = max(1.0, float(c["width"]) * u)
     x, y = L.click
     pad = int(r + 3 * w) + 2
     left, top = int(x) - pad, int(y) - pad
-    cx, cy = x - left, y - top  # sub-pixel center inside the layer, so the ring grows smoothly
+    cx, cy = x - left, y - top  # sub-pixel center inside the layer, so the effect moves smoothly
 
-    def ring(d, s):
+    def draw(d, s):
         R, W = r * s, w * s
-        d.ellipse(((cx - r - w) * s, (cy - r - w) * s, (cx + r + w) * s, (cy + r + w) * s),
-                  outline=(0, 0, 0, int(55 * a)), width=round(W + 2 * s))
-        d.ellipse((cx * s - R, cy * s - R, cx * s + R, cy * s + R), outline=CLICK_FILL + (int(235 * a),), width=round(W))
-    frame.alpha_composite(antialiased((pad * 2, pad * 2), ring), (left, top))
+        box = (cx * s - R, cy * s - R, cx * s + R, cy * s + R)
+        if c["shadow"]:
+            d.ellipse(((cx - r - w) * s, (cy - r - w) * s, (cx + r + w) * s, (cy + r + w) * s),
+                      outline=(0, 0, 0, int(60 * a)), width=round(W + 2 * s))
+        if c["style"] == "disc":
+            d.ellipse(box, fill=color + (int(160 * a),))
+        else:
+            d.ellipse(box, outline=color + (int(255 * a),), width=round(W))
+    frame.alpha_composite(antialiased((pad * 2, pad * 2), draw), (left, top))
 
 
 def paste(frame, L, t):
@@ -746,6 +814,9 @@ def check(src, items, layers, warnings, notes, W, H, fps, dur, zoom, sheet_path)
 
 
 def main():
+    if "--default-style" in sys.argv[1:]:
+        print(json.dumps(DEFAULT_STYLE, indent=2))
+        return
     args = [a for a in sys.argv[1:] if a != "--check"]
     checking = "--check" in sys.argv[1:]
     if (checking and len(args) not in (2, 3)) or (not checking and len(args) != 3):
@@ -754,6 +825,7 @@ def main():
     W, H, fps, dur = probe(src)
     spec = json.loads(Path(spec_path).read_text())
     items = spec["items"] if isinstance(spec, dict) else spec
+    load_style(spec.get("style") if isinstance(spec, dict) else None)
     zoom = Zoom(items, W, H)
     scene = Scene(src, W, H, zoom)
     layers, warnings, notes = build_layers(items, W, H, dur, scene, zoom)
