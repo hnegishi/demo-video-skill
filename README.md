@@ -10,18 +10,11 @@
 | CLI・ターミナル・TUI | VHSの`.tape`で録画する |
 | UIのないライブラリや仕組みの説明 | HTML/CSSのアニメーションを録画する |
 
-テロップ、タイトル、強調枠、吹き出し、クリックエフェクト、ズームは、録画した後にPillowで動画へ焼き込みます。注釈の位置と下地の色は、実際のフレームを解析して決めるため、画面の文字や強調する対象には重なりません。日本語は、OSに標準で入っているフォントで描画します。
+テロップやズーム、クリックエフェクトは録画後に自動で入り、画面の空いている場所に配置されます。
 
 ## サンプル
 
 このスキルで作った動画です。どれもClaude Codeに一言頼んだだけで、録画からテロップ、ズーム、仕上がりの確認までをClaudeが行いました。
-
-<!--
-  動画の差し込み方
-  1. GitHubでこのファイルの編集画面を開き、MP4を本文のどこかにドラッグ＆ドロップする
-  2. 挿入された https://github.com/user-attachments/assets/... のURLを切り取り、
-     下のvideoタグのsrcと置き換える
--->
 
 <table>
   <tr>
@@ -38,43 +31,16 @@
 
 ## インストール
 
-Claude Codeでこのリポジトリをマーケットプレイスとして追加し、プラグインをインストールします。
+Claude Codeで次のコマンドを実行してください。
 
 ```text
 /plugin marketplace add hnegishi/demo-video-skill
 /plugin install demo-video@demo-video-skill
 ```
 
-ターミナルからインストールする場合は、次のコマンドを実行してください。
+更新するときは`claude plugin update demo-video@demo-video-skill`を実行し、Claude Codeを再起動してください。
 
-```bash
-claude plugin marketplace add https://github.com/hnegishi/demo-video-skill
-claude plugin install demo-video@demo-video-skill
-```
-
-更新と削除には、次のコマンドを使います。
-
-```bash
-claude plugin marketplace update demo-video-skill   # マーケットプレイスの情報を更新
-claude plugin update demo-video@demo-video-skill    # 反映にはClaude Codeの再起動が必要
-claude plugin uninstall demo-video@demo-video-skill
-```
-
-インストールすると、スキル`demo-video:demo-video`が使えるようになります。デモ動画を頼むとClaudeが自動で読み込み、明示的に呼び出すときは`/demo-video:demo-video`と入力してください。
-
-プラグインを使わずに、スキルだけを入れることもできます。`demo-video/skills/demo-video/`を`~/.claude/skills/demo-video/`か、各リポジトリの`.claude/skills/demo-video/`にコピーしてください。
-
-## 必要なソフトウェア
-
-| ソフトウェア | 用途 |
-|---|---|
-| ffmpeg・ffprobe | 動画の変換と検証。すべての方式で必須 |
-| Python 3とPillow | 注釈の描画と、検証用の画像の生成 |
-| Node.js | Webとモーション動画の録画。Playwrightは初回の実行時に`~/.cache/demo-video-skill`へ自動でインストールされる |
-| Google Chrome | Webとモーション動画の録画。Chromeがなければ、PlaywrightのChromiumを使う |
-| VHS | CLIの録画だけで使う。`brew install vhs`でインストールできる |
-
-足りないソフトウェアがあると、Claudeはインストールしてよいかを確認してから入れます。
+どの方式でも、ffmpegとPython 3（Pillow）を使います。Webとモーション動画の録画にはNode.jsとGoogle Chromeが必要で、Chromeの代わりにPlaywrightのChromiumも使えます。CLIの録画にはVHSが必要です。足りないものがあると、Claudeはインストールしてよいかを確認してから入れます。
 
 ## 使い方
 
@@ -84,31 +50,7 @@ Claude Codeへの頼み方の例です。
 - 「CLIの使い方をREADMEに載せる動画にして」
 - 「このライブラリの仕組みを30秒くらいのアニメーションで説明したい」
 
-完成した動画の隣には、録り直し用のスクリプト、注釈の時刻と文言を記録した`*.annotations.json`、注釈を入れる前の`*.plain.mp4`が保存されます。テロップの文言やタイミングだけを直すなら、録り直さずに焼き込み直せます。
-
-```bash
-S=~/.claude/plugins/cache/demo-video-skill/demo-video/<version>/skills/demo-video/scripts
-python3 $S/annotate.py demo.plain.mp4 demo.annotations.json --check   # 配置の確認（数秒）
-python3 $S/annotate.py demo.plain.mp4 demo.annotations.json demo.mp4  # 焼き込み
-```
-
-## 見た目のカスタマイズ
-
-クリックエフェクト、強調色、角の丸み、文字の大きさ、下地の色は、どれも初期設定の値です。クリックエフェクトは初期設定で「広がって消える白い輪」になっており、`"ring"`・`"disc"`・`"none"`の3種類から選べます。初期設定の一覧は次のコマンドで確認できます。
-
-```bash
-python3 $S/annotate.py --default-style > my-style.json
-```
-
-1本の動画だけ見た目を変えるときは、`annotations.json`に`"style"`を書き足してください。「クリックエフェクトは黄色の円で」のようにClaudeへ頼むこともできます。いつも同じ見た目で作りたい場合は、スタイルを書いたJSONファイルを用意し、環境変数`DEMO_VIDEO_STYLE`にそのパスを設定してください。どちらの方法でも、変えたい項目だけを書けば十分です。
-
-```json
-{
-  "click": { "style": "disc", "color": [255, 196, 0] },
-  "accent": [40, 110, 255],
-  "corner_radius": 3
-}
-```
+クリックエフェクトや強調色などの見た目は初期設定の値で、「クリックエフェクトは黄色の円で」のように頼めば変えられます。
 
 ## リポジトリの構成
 
@@ -122,5 +64,3 @@ demo-video/                         プラグイン本体
     scripts/                        録画、注釈、検証のスクリプト
 evals/                              スキルの評価に使うテストケースと題材
 ```
-
-公開する前に、`claude plugin validate .`と`claude plugin validate ./demo-video`で定義ファイルを検証してください。プラグインの内容を変えたときは、`plugin.json`と`marketplace.json`の`version`を上げる必要があります。上げないと、インストール済みの環境に更新が届きません。
