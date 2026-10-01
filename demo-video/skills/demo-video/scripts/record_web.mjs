@@ -3,7 +3,7 @@
 //
 // Usage:
 //   node record_web.mjs <scenario.mjs | page.html> --out demo.mp4 [--width 1280] [--height 720]
-//                       [--duration 60] [--keep-webm] [--style style.json]
+//                       [--duration 60] [--keep-webm] [--style style.json] [--seed N]
 //
 // scenario.mjs must `export default async function ({ page, demo }) { ... }`.
 // page.html (motion mode) is opened and recorded until window.__demoDone === true
@@ -21,7 +21,8 @@
 //    an OS-bundled Japanese font, automatic placement that avoids covering content)
 
 import { createRequire } from 'node:module';
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import { promisify } from 'node:util';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -58,6 +59,7 @@ function parseArgs(argv) {
     else if (a === '--duration') args.duration = Number(argv[++i]);
     else if (a === '--keep-webm') args.keepWebm = true;
     else if (a === '--style') args.style = argv[++i];
+    else if (a === '--seed') args.seed = argv[++i];
     else rest.push(a);
   }
   args.input = rest[0];
@@ -120,6 +122,26 @@ function makeDemo(page, state) {
     if (!box) throw new Error(`element not visible: ${target}`);
     return { loc, box, x: box.x + box.width / 2, y: box.y + box.height / 2 };
   };
+  const waitVoice = async () => {
+    await state.voicePending;   // the line before may still be synthesizing
+    const left = state.voiceUntil - Date.now();
+    if (left > 0) await page.waitForTimeout(left);
+  };
+  const speak = async (text, { wait }) => {
+    if (!state.audio?.enabled) return;
+    fs.mkdirSync(state.voiceDir, { recursive: true });
+    const file = path.join(state.voiceDir, `${String(state.voiceN++).padStart(2, '0')}.wav`);
+    const t = now();
+    const startedAt = Date.now();
+    state.annotations.push({ type: 'narration', start: t, text, file });
+    // synthesize in the background so the scenario (and the caption on screen) doesn't stall for it;
+    // the next caption / say() waits until this line has been spoken
+    state.voicePending = promisify(execFile)('python3',
+      [AUDIO_PY, '--tts', text, file, '--audio', JSON.stringify(state.audio)], { encoding: 'utf8' })
+      .then(({ stdout }) => { state.voiceUntil = startedAt + (JSON.parse(stdout).duration || 0) * 1000 + 150; })
+      .catch((e) => console.error(`[record_web] warning: narration "${text.slice(0, 16)}" failed: ${e.message}`));
+    if (wait) await waitVoice();
+  };
   // bounding box of one target or an array of targets (e.g. only the rows currently shown)
   const unionBox = async (target) => {
     const boxes = [];
@@ -169,13 +191,34 @@ function makeDemo(page, state) {
       await page.waitForTimeout(pauseAfter);
     },
     // Caption stays until the next caption(), hideCaption(), or the end of the video.
+    // opts.avoid: element(s) this caption talks about; vertical text placed on the picture keeps off them
     async caption(text, ms = 2000, opts = {}) {
+      // an array = several separate things to keep clear (not one box spanning all of them)
+      if (opts.avoid) {
+        const list = Array.isArray(opts.avoid) ? opts.avoid : [opts.avoid];
+        const avoid = [];
+        for (const tg of list) avoid.push(rect(await unionBox(tg)));
+        opts = { ...opts, avoid };
+      }
+      // when captions are read aloud, don't start a new one over the previous line
+      if (text && state.narrateCaptions) await waitVoice();
       const t = now();
       closeCaption(t);
       if (text) state.annotations.push({ type: 'caption', start: t, end: null, text, ...opts });
+      if (text && state.narrateCaptions) await speak(text, { wait: false });
       if (ms) await page.waitForTimeout(ms);
     },
-    async hideCaption() { closeCaption(now()); },
+    // Narration (text-to-speech). Synthesized now so the scenario can wait for it to finish;
+    // mixed into the video afterwards by audio.py. Needs "audio.enabled" in the style.
+    async say(text, { wait = true } = {}) {
+      await waitVoice();
+      await speak(text, { wait });
+    },
+    // when captions are read aloud, the caption stays until its line has been spoken
+    async hideCaption() {
+      if (state.narrateCaptions) await waitVoice();
+      closeCaption(now());
+    },
     // Red outline around an element (coordinates captured now; don't scroll while it's shown).
     async box(target, { label, ms = 1500, pad } = {}) {
       const box = await unionBox(target);
@@ -194,22 +237,57 @@ function makeDemo(page, state) {
     // Smoothly zoom the camera onto an element (or several: pass an array) and keep it there until
     // zoomOut() or the next zoomTo(). Waits for the zoom-in to finish. Keep the cursor's moves
     // inside the zoomed area, or zoom out first.
-    async zoomTo(target, { pad = 24, ease = 0.6, maxScale = 2.5 } = {}) {
+    // ease defaults to the style's zoom.ease (0.6s normally, 0.3s in the dopagaki preset)
+    async zoomTo(target, { pad = 24, ease = state.zoomEase, maxScale = 2.5 } = {}) {
       const box = await unionBox(target);
       const t = now();
       closeZoom(t);
       state.annotations.push({ type: 'zoom', start: t, end: null, ease, pad, max_scale: maxScale, ...rect(box) });
       await page.waitForTimeout(ease * 1000);
     },
-    async zoomOut({ ease = 0.6 } = {}) {
+    async zoomOut({ ease = state.zoomEase } = {}) {
       closeZoom(now());
       await page.waitForTimeout(ease * 1000);
     },
-    // Full-screen title card over a dimmed frame.
-    async title(text, { sub, ms = 2500 } = {}) {
+    // Section label ("① ホーム") at the top-left of the picture, until the next chapter.
+    // opts: its own look and place (shape, color, fill, rim, size, tilt, position, align, entrance, idle)
+    async chapter(text, opts = {}) {
+      state.annotations.push({ type: 'chapter', start: now(), text, ...opts });
+    },
+    // End card: dims the frame and shows a closing line (+ an optional sub line) to the end. Optional.
+    async outro(text, { sub, ms = 1800, ...opts } = {}) {
+      closeCaption(now());
+      state.annotations.push({ type: 'outro', start: now(), text, ...(sub ? { sub } : {}), ...opts });
+      if (ms) await page.waitForTimeout(ms);
+    },
+    // Short pop-up text for a key moment; look / place / "duration" (s on screen, default 1.2) from opts.
+    // Placed where it covers no other text and nothing the video points at. Doesn't wait unless ms is given.
+    async stamp(text, { ms = 0, angle, ...opts } = {}) {
       const t = now();
-      state.annotations.push({ type: 'title', start: t, end: t + ms / 1000, text, sub });
-      await page.waitForTimeout(ms);
+      state.annotations.push({ type: 'stamp', start: t, text, ...(angle != null ? { angle } : {}), ...opts });
+      if (ms) await page.waitForTimeout(ms);
+    },
+    // Brief white flash over the whole frame (scene changes, the opening hook). annotate.py keeps
+    // flashes at least 0.5s apart for photosensitive viewers.
+    async flash({ opacity, ms } = {}) {
+      state.annotations.push({ type: 'flash', start: now(), ...(opacity ? { opacity } : {}),
+        ...(ms ? { duration: ms / 1000 } : {}) });
+    },
+    // Brief camera shake (e.g. on a result that should land hard). Rendered by annotate.py.
+    async shake({ amplitude = 8, ms = 300 } = {}) {
+      const t = now();
+      state.annotations.push({ type: 'shake', start: t, end: t + ms / 1000, amplitude });
+    },
+    // Full-screen title card over a dimmed frame.
+    // ms = 0: don't wait, keep it up (in the vertical layout it stays as a header until the next title)
+    // badge: small pill shown with the title intro (e.g. '速報')
+    async title(text, { sub, ms = 2500, badge, ...opts } = {}) {
+      const t = now();
+      // ms = 0 keeps it up only in the vertical layout (as the header); landscape: nothing to show
+      const keep = styleOverrides?.layout === 'vertical' ? null : t;
+      state.annotations.push({ type: 'title', start: t, end: ms ? t + ms / 1000 : keep, text, sub,
+        ...(badge ? { badge } : {}), ...opts });
+      if (ms) await page.waitForTimeout(ms);
     },
     get mouse() { return mouse; },
   };
@@ -249,7 +327,18 @@ await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => request
 const flashAt = Date.now();
 await page.waitForTimeout(300);
 await page.setContent('<body style="margin:0;background:#fff"></body>');
-const state = { width: args.width, height: args.height, startAt: undefined, annotations: [], mousedowns: [] };
+// Styles with "themes"/"vary" (e.g. dopagaki) are resolved here, once, so recording (zoom speed,
+// voice) and burning use the same draw; the resolved style (theme + seed) goes into annotations.json.
+const styleOverrides = args.style ? JSON.parse(execFileSync('python3', [
+  path.join(path.dirname(fileURLToPath(import.meta.url)), 'annotate.py'), '--resolve-style', args.style,
+  ...(args.seed ? [String(args.seed)] : [])], { encoding: 'utf8' })) : undefined;
+if (styleOverrides?.theme) console.log(`[record_web] theme: ${styleOverrides.theme}, composition: ${styleOverrides.composition ?? 'classic'} (seed ${styleOverrides.seed})`);
+const AUDIO_PY = path.join(path.dirname(fileURLToPath(import.meta.url)), 'audio.py');
+const audioStyle = styleOverrides?.audio;
+const state = { width: args.width, height: args.height, startAt: undefined, annotations: [], mousedowns: [],
+  zoomEase: Number(styleOverrides?.zoom?.ease ?? 0.6),
+  audio: audioStyle, narrateCaptions: !!(audioStyle?.enabled && audioStyle?.narrate_captions),
+  voiceDir: args.out.replace(/\.\w+$/, '') + '.narration', voiceN: 0, voiceUntil: 0 };
 const demo = makeDemo(page, state);
 
 let failed = null;
@@ -274,6 +363,7 @@ try {
     const mod = await import(pathToFileURL(input).href);
     await mod.default({ page, demo, context, browser });
   }
+  await state.voicePending;   // last narration line written before the recording ends
   await page.waitForTimeout(300);
 } catch (e) {
   failed = e;
@@ -298,7 +388,6 @@ function findFlash(file) {
   return null;
 }
 const flashVideoT = findFlash(webm);
-if (flashVideoT === null) console.error('[record_web] warning: sync flash not found; annotation timing may be ~0.3s late');
 const anchorVideoT = flashVideoT ?? (flashAt - recordStart) / 1000;
 const flashTrim = state.startAt ? anchorVideoT + (state.startAt - flashAt) / 1000 : 0;
 
@@ -324,9 +413,13 @@ const fits = state.mousedowns.filter((a) => a >= 0).map((a) => {
   return Math.abs(near - (a + flashTrim)) < 0.6 ? near - a : null;
 }).filter((v) => v !== null).sort((x, y) => x - y);
 if (fits.length) trim = fits[Math.floor(fits.length / 2)];
+else if (flashVideoT === null && state.startAt) {
+  console.error('[record_web] warning: no sync marker found; annotation timing may be ~0.3s late');
+}
 trim = Math.max(0, trim);
 fs.mkdirSync(path.dirname(path.resolve(args.out)), { recursive: true });
-const annotations = state.annotations.filter((a) => a.type === 'click' || a.end === null || a.end > a.start);
+// keep instant / open-ended items (clicks, narration, unclosed captions); drop zero-length ones
+const annotations = state.annotations.filter((a) => a.end == null || a.end > a.start);
 const base = args.out.replace(/\.\w+$/, '');
 const plain = annotations.length ? `${base}.plain.mp4` : args.out;
 execFileSync('ffmpeg', [
@@ -341,13 +434,20 @@ if (annotations.length) {
   const annPath = `${base}.annotations.json`;
   const round = (v) => (v === null ? null : Math.round(v * 100) / 100);
   // look & feel overrides (click effect, accent, corner radius...) travel with the annotations
-  const style = args.style ? JSON.parse(fs.readFileSync(args.style, 'utf8')) : undefined;
+  const style = styleOverrides;
   fs.writeFileSync(annPath, JSON.stringify({
     ...(style ? { style } : {}),
     items: annotations.map((a) => ({ ...a, start: round(Math.max(0, a.start)), end: round(a.end ?? null) })),
   }, null, 2));
   const annotate = path.join(path.dirname(fileURLToPath(import.meta.url)), 'annotate.py');
-  execFileSync('python3', [annotate, plain, annPath, args.out], { stdio: 'inherit' });
+  if (audioStyle?.enabled) {
+    // picture first, then sound effects / music / narration on top
+    const silent = `${base}.silent.mp4`;
+    execFileSync('python3', [annotate, plain, annPath, silent], { stdio: 'inherit' });
+    execFileSync('python3', [AUDIO_PY, silent, annPath, args.out], { stdio: 'inherit' });
+  } else {
+    execFileSync('python3', [annotate, plain, annPath, args.out], { stdio: 'inherit' });
+  }
 }
 if (args.keepWebm) fs.copyFileSync(webm, args.out.replace(/\.\w+$/, '') + '.webm');
 fs.rmSync(tmpDir, { recursive: true, force: true });

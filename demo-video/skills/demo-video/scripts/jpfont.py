@@ -2,6 +2,7 @@
 
     from jpfont import load_font
     font = load_font(32, bold=True)          # ImageFont.FreeTypeFont
+    font = load_font(48, bold="heavy")       # extra-heavy weight for punchy captions
     python3 jpfont.py                        # print what would be used
 
 Search order (first hit wins; override with env DEMO_VIDEO_FONT=/path/to/font[.ttc][:index]):
@@ -36,7 +37,8 @@ def _nfc_listdir(d):
 
 
 def _mac_candidates(bold):
-    weights = ["W6", "W7", "W5"] if bold else ["W3", "W4", "W2"]
+    weights = (["W9", "W8", "W7"] if bold == "heavy" else ["W6", "W7", "W5"] if bold
+               else ["W3", "W4", "W2"])
     files = dict(_nfc_listdir("/System/Library/Fonts"))
     out = []
     for w in weights:
@@ -72,7 +74,9 @@ def _linux_candidates(bold):
                 score += 10
             if "Gothic" in rest or "Sans" in rest:
                 score += 3
-            if bold == ("Bold" in rest):
+            if bold == "heavy":
+                score += 4 if ("Black" in rest or "Heavy" in rest) else 2 if "Bold" in rest else 0
+            elif bool(bold) == ("Bold" in rest):
                 score += 2
             if "Mono" in rest:
                 score -= 1
@@ -138,7 +142,45 @@ def load_font(size, bold=True):
     return ImageFont.truetype(path, int(size), index=idx)
 
 
+def _emoji_candidates():
+    env = os.environ.get("DEMO_VIDEO_EMOJI_FONT")
+    if env:
+        return [env]
+    if sys.platform == "darwin":
+        return ["/System/Library/Fonts/Apple Color Emoji.ttc"]
+    if sys.platform.startswith("win"):
+        return [os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "seguiemj.ttf")]
+    out = []
+    try:
+        res = subprocess.run(["fc-list", ":charset=1f600", "file"], capture_output=True, text=True, timeout=10).stdout
+        out += [l.split(":")[0].strip() for l in res.splitlines() if l.strip()]
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return out + glob.glob("/usr/share/fonts/**/NotoColorEmoji*.ttf", recursive=True)
+
+
+@functools.lru_cache(maxsize=None)
+def find_emoji_font():
+    """(path, size) of a color emoji font Pillow can render, or None (emoji are then dropped).
+    Bitmap emoji fonts only load at their strike sizes, so a few common ones are tried."""
+    for path in _emoji_candidates():
+        if not os.path.exists(path):
+            continue
+        for size in (160, 137, 136, 128, 109, 96, 72, 64, 48):
+            try:
+                f = ImageFont.truetype(path, size)
+                im = Image.new("RGBA", (size * 2, size * 2), (0, 0, 0, 0))
+                ImageDraw.Draw(im).text((0, 0), "\U0001F600", font=f, embedded_color=True)
+                if im.getbbox():
+                    return path, size
+            except OSError:
+                continue
+    return None
+
+
 if __name__ == "__main__":
-    for b in (True, False):
+    for b in ("heavy", True, False):
         p, i = find_font(b)
-        print(f"{'bold   ' if b else 'regular'}: {p} (index {i}) -> {load_font(24, b).getname()}")
+        label = {"heavy": "heavy  ", True: "bold   ", False: "regular"}[b]
+        print(f"{label}: {p} (index {i}) -> {load_font(24, b).getname()}")
+    print(f"emoji  : {find_emoji_font() or 'not found (emoji will be dropped)'}")

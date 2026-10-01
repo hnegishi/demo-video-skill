@@ -63,15 +63,22 @@ export default async ({ page, demo }) => {
 | `demo.start()` | 録画の実質的な開始点を記録する。これより前は MP4 からトリムされる |
 | `demo.click(target, {pauseAfter, effect})` | カーソルを滑らかに移動してクリックする。クリックエフェクト（広がって消える白い輪）が付く。`effect: false` で消せる |
 | `demo.type(target, text, {delay})` | 入力欄をクリックして 1 文字ずつ入力する（既定 70ms/文字）。最初のクリックにエフェクトが付く |
-| `demo.zoomTo(target, {pad, ease, maxScale})` | 要素（配列で複数指定可）に滑らかにズームし、`zoomOut()` か次の `zoomTo()` まで保つ。ズームし終わるまで待つ。既定は余白 24px、0.6 秒、最大 2.5 倍 |
+| `demo.zoomTo(target, {pad, ease, maxScale})` | 要素（配列で複数指定可。`await page.locator('…').all()` で配列にする）に滑らかにズームし、`zoomOut()` か次の `zoomTo()` まで保つ。ズームし終わるまで待つ。既定は余白 24px、0.6 秒、最大 2.5 倍 |
 | `demo.zoomOut({ease})` | ズームを戻す |
 | `demo.hover(target)` | カーソルを移動してとどまる（ツールチップを見せるときなど） |
 | `demo.moveTo(x, y, ms)` | 座標を指定してカーソルを移動する |
-| `demo.caption(text, ms, {position})` | テロップを出し、`ms` だけ待つ（`ms=0` なら待たずに次へ）。次の `caption` か `hideCaption` まで表示される。置き場所は空いている所に自動で決まる（下部中央を優先）。`{position: 'top'}` などで固定もできる |
+| `demo.caption(text, ms, {position, entrance, idle})` | テロップを出し、`ms` だけ待つ（`ms=0` なら待たずに次へ）。次の `caption` か `hideCaption` まで表示される。置き場所は空いている所に自動で決まる（下部中央を優先）。`{position: 'top'}` などで固定もできる。`entrance`（`fade`・`pop`・`slide`・`type`）と `idle`（`none`・`float`・`pulse`・`wiggle`）で出方と動きを指定できる。縦長では `position`（`above`・`below`・`over`＝映像の上に重ねる）と `align`（`left`・`center`・`right`）、`tilt`（度）でこの 1 本だけ置き方を変えられる。`avoid`（要素）を渡すと、映像に重ねるときにその要素を隠さない。`**強調**` は色が変わり、絵文字はカラーで描かれる |
 | `demo.hideCaption()` | テロップを消す |
 | `demo.title(text, {sub, ms})` | 画面を暗くして中央に大きなタイトルを出す |
 | `demo.box(target, {label, ms})` | 要素を赤枠で囲む（ラベル付き可）。配列を渡すと全体を囲む（例: 表示中の行だけ `await page.locator('li').all()`。`all()` は Promise を返すので `await` が要る） |
 | `demo.callout(target, text, {ms})` | 要素の横の空いた場所に吹き出しを出す。配列も可 |
+| `demo.shake({amplitude, ms})` | 画面を一瞬揺らす。酔いやすいので 1 本で 1〜2 回まで |
+| `demo.title(text, {sub, ms, badge})` の `badge` | 冒頭のタイトルに付ける小さなバッジ。ドパガキ仕様の縦長でだけ使われる |
+| `demo.chapter(text)` | 章のバッジ（「① ホーム」など）を出す。次の章まで残る |
+| `demo.outro(text, {sub, ms})` | 締めのカード。画面が暗くなり、締めの一言と補足が最後まで出る |
+| `demo.stamp(text, {ms, angle})` | 大きな傾いた文字を要所で弾ませて出す（約 1.2 秒）。縦長では映像の下に出る |
+| `demo.flash({opacity, ms})` | 画面を一瞬白く光らせる（場面の切り替わりに）。0.5 秒以内に続くものは自動で間引かれる |
+| `demo.say(text, {wait})` | 読み上げる（スタイルの `audio.enabled` が true のとき）。既定では読み終わるまで待つ |
 | `demo.pause(ms)` | 待つ |
 
 `target` には CSS セレクタ文字列か Playwright の Locator を渡す。

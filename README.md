@@ -52,6 +52,22 @@ Claude Codeへの頼み方の例です。
 
 クリックエフェクトや強調色などの見た目は初期設定の値で、「クリックエフェクトは黄色の円で」のように頼めば変えられます。
 
+## ドパガキ仕様
+
+引数に`dopagaki`を付けると、ドパガキ向けの動画が作成できます。
+
+```text
+/demo-video:demo-video dopagaki
+```
+
+<table>
+  <tr>
+    <td width="320"><!-- ドパガキ仕様のサンプル動画をここに貼る --></td>
+  </tr>
+</table>
+
+毎回、構成や見た目、BGMの違う動画になります。
+
 ## リポジトリの構成
 
 ```text
@@ -60,7 +76,8 @@ demo-video/                         プラグイン本体
   .claude-plugin/plugin.json
   skills/demo-video/
     SKILL.md                        作り方の選び方、注釈、検証、仕上げの手順
-    references/                     方式ごとの手順（web.md・cli.md・motion.md）
-    scripts/                        録画、注釈、検証のスクリプト
+    references/                     方式ごとの手順（web.md・cli.md・motion.md）、ドパガキ仕様（dopagaki.md）
+    scripts/                        録画、注釈、音、検証のスクリプト
+    styles/                         ドパガキ仕様の形式を決めたスタイル（dopagaki.json）
 evals/                              スキルの評価に使うテストケースと題材
 ```

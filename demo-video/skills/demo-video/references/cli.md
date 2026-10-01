@@ -79,7 +79,7 @@ python3 <skill>/scripts/inspect_video.py demo.plain.mp4 --at 9.5 --grid   # 100p
 
 ターミナルは文字が詰まっていて注釈の置き場所が少ない。長い出力の一部を読ませたいときは `@zoom` で寄ると、テロップや吹き出しの置き場所もできる。
 
-時刻は `.tape` の記述から計算する（`Type` は「文字数 − 1」× TypingSpeed、`Sleep` は指定どおり、`Hide` 中は数えない）。実測との差は 0.1 秒程度。ただし `Wait` の所要時間は計算できない。`Wait` の後に印を置くと時刻が早めにずれるので、印の前は `Sleep` で区切る。
+時刻は `.tape` の記述から計算する（`Type` は「文字数 − 1」× TypingSpeed、`Sleep` は指定どおり、`Hide` 中は数えない）。短い tape では実測との差は 0.1 秒程度だが、長い tape や日本語を多く打つ tape では 1 秒近くずれたことがある。焼き込む前に `annotate.py --check` と `inspect_video.py --at` で、テロップが場面と合っているかを必ず確かめ、ずれていれば `annotations.json` の時刻を直して焼き込み直す。ただし `Wait` の所要時間は計算できない。`Wait` の後に印を置くと時刻が早めにずれるので、印の前は `Sleep` で区切る。
 
 ## 書き方のポイント
 

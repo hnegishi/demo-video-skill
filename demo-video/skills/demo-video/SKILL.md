@@ -1,5 +1,6 @@
 ---
 name: demo-video
+argument-hint: "[dopagaki]"
 description: 機能やツールのデモ動画（MP4/GIF）を作る。Web アプリの操作録画（Playwright）、CLI・ターミナル操作の録画（VHS）、UI のない機能や仕組みを説明するモーション動画（HTML/CSS アニメーションを録画）の 3 方式から対象に合うものを選び、録画・変換・検証まで行う。「デモ動画を作って」「操作動画」「画面録画」「GIF にして README/PR に貼りたい」「この CLI の使い方を動画で」「機能紹介の動画」「ターミナルのキャスト」など、動画や GIF でソフトウェアの動きを見せたいときは、"デモ" という語がなくても必ずこのスキルを使うこと。
 ---
 
@@ -8,6 +9,12 @@ description: 機能やツールのデモ動画（MP4/GIF）を作る。Web ア�
 ソフトウェアの動きを短い動画で見せるためのスキル。対象に応じて 3 つの作り方を使い分け、最後に必ず中身を検証してから渡す。
 
 このファイル内の `<skill>` は、この SKILL.md があるディレクトリを指す（プラグインとして入れた場合は `${CLAUDE_PLUGIN_ROOT}/skills/demo-video`）。スクリプトは `<skill>/scripts/` にある。
+
+## 0. 仕上がりのモード
+
+引数（`/demo-video:demo-video dopagaki` のように渡されると、本文の末尾に `ARGUMENTS: dopagaki` として付く）か依頼文に `dopagaki`、「ドパガキ仕様」「ドパガキ」「ショート動画っぽく」「テンポよく派手に」などとあれば、**ドパガキ仕様**で作る。作り方を選んだ後に `references/dopagaki.md` を読み、通常の手順にその差分を上乗せする。形式は `<skill>/styles/dopagaki.json` で切り替え、見た目は動画ごとに自分で決めて書き足す。ユーザーから指定がない限り、縦長（ショート動画）で、効果音・BGM・読み上げ付きで仕上げる。
+
+それ以外は通常のモードで作る。
 
 ## 1. 作り方を選ぶ
 
@@ -82,7 +89,7 @@ description: 機能やツールのデモ動画（MP4/GIF）を作る。Web ア�
 
 ### 注釈の直し方（録り直さない）
 
-テロップの文言・表示時間・ズーム範囲を直すときは、`*.annotations.json` を編集し、まず `--check` で確かめてから焼き込む。`--check` はエンコードしないので数秒で終わり、配置の警告・帯の通知・読む時間が足りないテロップを表示し、各注釈の表示中の場面を並べた `*.check.png` を書き出す。この画像を Read で見て、問題がなくなってから本番の焼き込みをする。
+テロップの文言・表示時間・ズーム範囲を直すときは、`*.annotations.json`（注釈は `items` の配列に 1 件ずつ入っていて、`start`・`end` が秒、見た目は `style`）を編集し、まず `--check` で確かめてから焼き込む。`--check` はエンコードしないので数秒で終わり、配置の警告・帯の通知・読む時間が足りないテロップを表示し、各注釈の表示中の場面を並べた `*.check.png` を書き出す。この画像を Read で見て、問題がなくなってから本番の焼き込みをする。
 ```bash
 python3 <skill>/scripts/annotate.py demo.plain.mp4 demo.annotations.json --check   # 数秒。demo.annotations.check.png を見る
 python3 <skill>/scripts/annotate.py demo.plain.mp4 demo.annotations.json demo.mp4  # 本番
@@ -100,6 +107,7 @@ CLI では `tape_annotations.py demo.tape --burn --check` で同じ確認がで�
 | 日本語フォント | 注釈 | OS 標準のものを自動で使う。Linux で見つからないときは `fonts-noto-cjk` など（入れる前に確認する）。`DEMO_VIDEO_FONT=/path/to/font` で指定もできる |
 | Playwright + Chrome | web / motion | `scripts/record_web.mjs` が初回に `~/.cache/demo-video-skill` へ自動で入れる。ブラウザはインストール済みの Google Chrome を使い、無ければ Playwright の Chromium を使う |
 | VHS | cli | `brew install vhs`（入れる前にユーザーに確認する） |
+| 読み上げ（TTS） | ドパガキ仕様の読み上げ | macOS の `say` を使う。macOS 以外は `DEMO_VIDEO_TTS` にコマンドを設定する。なければ読み上げを省く |
 
 システムへのインストールは副作用なので、無い道具を入れる前にはユーザーに一言確認する。
 
@@ -147,3 +155,8 @@ python3 <skill>/scripts/inspect_video.py out/demo.mp4 --at 1.2,4,7.5   # 指定�
 - `inspect_video.py` — 尺・解像度・コーデック・平均輝度の表示と、時刻入りのフレーム一覧画像の生成。`--grid` で座標読み取り用の方眼付き画像も出す。
 - `to_gif.sh` — パレット生成付きの高品質 GIF 変換。
 - `concat.sh` — 複数の動画を解像度をそろえてつなぐ。
+- `audio.py` — 効果音・BGM・読み上げを生成して動画に合成する（スタイルの `audio.enabled` が true のとき、録画スクリプトが自動で呼ぶ）。
+
+## styles/
+
+- `dopagaki.json` — ドパガキ仕様の形式（縦長 1080x1920、極太の縁取りテロップ、効果音・BGM・読み上げなど）。色・構図・動きは含まないので、コピーして動画ごとに書き足し、`--style` で渡す。

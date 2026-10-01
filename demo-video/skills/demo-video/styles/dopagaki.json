@@ -1,0 +1,59 @@
+{
+  "corner_radius": 4,
+  "fade": 0.1,
+  "caption_size": 46,
+  "callout_size": 30,
+  "title_size": 88,
+  "title_dim": 0.75,
+  "caption": {
+    "style": "outline",
+    "weight": "heavy",
+    "outline_width": 8,
+    "emoji_sticker": true
+  },
+  "zoom": {
+    "ease": 0.3,
+    "overshoot": 1.0
+  },
+  "shake_on_click": 0,
+  "click": {
+    "opacity": 1.0,
+    "duration": 0.4,
+    "radius_from": 8,
+    "radius_to": 40,
+    "width": 3,
+    "shadow": true
+  },
+  "layout": "vertical",
+  "canvas": [
+    1080,
+    1920
+  ],
+  "audio": {
+    "enabled": true,
+    "sfx": true,
+    "sfx_volume": 0.55,
+    "bgm": "synth",
+    "bgm_volume": 0.22,
+    "narration": true,
+    "narrate_captions": true,
+    "voice": "Kyoko",
+    "rate": 270,
+    "engine": "say",
+    "voice_pitch": 1.0,
+    "voice_tempo": 1.0
+  },
+  "drift": 0.03,
+  "punch": 0.1,
+  "progress": {
+    "enabled": true,
+    "height": 10
+  },
+  "stamp_size": 78,
+  "header_two_tone": true,
+  "title_intro": 2.0,
+  "reading": {
+    "base": 0.6,
+    "per_char": 0.07
+  }
+}

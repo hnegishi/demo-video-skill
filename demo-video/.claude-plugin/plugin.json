@@ -1,7 +1,7 @@
 {
   "name": "demo-video",
   "description": "ソフトウェアのデモ動画（MP4/GIF）を作る。Web UI の操作録画（Playwright）、CLI・TUI の録画（VHS）、UI のない仕組みの説明動画（HTML/CSS アニメーション）に対応し、テロップ・ズーム・クリックエフェクトを焼き込んで検証まで行う。",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "author": {
     "name": "hnegishi"
   },
