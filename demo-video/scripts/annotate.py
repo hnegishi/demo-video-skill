@@ -31,7 +31,7 @@ Coordinates are input-video pixels; times are seconds; "end" may be omitted (= e
            emptiest side.
   callout  speech bubble about a target rect (x, y, w, h) - or a point (x, y) - placed beside the
            target on the emptiest side, never on top of it, with a stem pointing at it.
-  click    simple translucent white disc at (x, y) that pops in, presses and fades (~0.5s).
+  click    thin white ring at (x, y) that expands and fades (~0.5s).
   zoom     smoothly zooms into rect (x, y, w, h) from "start", holds, and zooms back out after "end".
            The rect is expanded to the video's aspect ratio. "ease" (default 0.6s) sets the
            transition length. Consecutive zooms pan directly from one rect to the next.
@@ -63,7 +63,7 @@ from jpfont import load_font  # noqa: E402
 ACCENT = (255, 72, 72, 255)
 FADE = 0.2
 CLICK_DUR = 0.5
-CLICK_FILL = (255, 255, 255)  # simple translucent white disc, with a faint shadow so it reads on white UIs
+CLICK_FILL = (255, 255, 255)  # click effect: thin white ring that expands and fades
 CORNER = 6                    # corner radius of plates/boxes at 720p (small: reads as a label, not a pill)
 SAMPLE_FPS = 4
 SAMPLE_DIV = 4          # layout analysis runs on 1/4-size frames
@@ -630,34 +630,23 @@ def render_callout(it, u, layout, t0, t1):
 
 
 def draw_click(frame, L, t, u):
-    """Simple white disc under the cursor that pops in, 'presses' (shrinks a little) and fades.
-    Translucent so the button label underneath stays readable; a faint soft shadow keeps it visible
-    on white backgrounds."""
+    """Thin white ring centered on the click that expands (fast, then easing out) and fades.
+    No fill, so whatever was clicked stays fully visible. A faint dark edge keeps the ring
+    readable on white UIs, where plain white would vanish."""
     dt = t - L.start
     if not 0 <= dt < CLICK_DUR:
         return
-    if dt < 0.08:                                   # pop in: visible from the very first frame,
-        k, a = 0.85 + 0.15 * smooth(dt / 0.08), 0.75 + 0.25 * smooth(dt / 0.08)  # so it isn't late
-    elif dt < 0.2:                                  # press
-        k, a = 1.0 - 0.18 * smooth((dt - 0.08) / 0.12), 1.0
-    else:                                           # release + fade
-        q = (dt - 0.2) / (CLICK_DUR - 0.2)
-        k, a = 0.82 + 0.08 * smooth(q), 1 - smooth(q)
-    x, y = L.click
-    r = 22 * u * k
-    pad = int(r + 8 * u) + 2
+    q = dt / CLICK_DUR
+    grow = 1 - (1 - q) ** 3                          # ease-out: quick burst, then settles
+    r = (6 + 30 * grow) * u
+    a = 1 - q                                        # fades linearly to nothing
+    w = max(1, round(2 * u))
+    pad = int(r + 3 * w) + 2
     layer = Image.new("RGBA", (pad * 2, pad * 2), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
-    sr = r + 1.5 * u
-    d.ellipse((pad - sr, pad - sr, pad + sr, pad + sr), fill=(0, 0, 0, int(70 * a)))
-    layer = layer.filter(ImageFilter.GaussianBlur(3 * u))
-    d = ImageDraw.Draw(layer)
-    # punch the shadow out under the disc so it doesn't darken the clicked element
-    d.ellipse((pad - r, pad - r, pad + r, pad + r), fill=(0, 0, 0, 0))
-    disc = Image.new("RGBA", layer.size, (0, 0, 0, 0))
-    ImageDraw.Draw(disc).ellipse((pad - r, pad - r, pad + r, pad + r), fill=CLICK_FILL + (int(150 * a),))
-    layer.alpha_composite(disc)
-    frame.alpha_composite(layer, (int(x) - pad, int(y) - pad))
+    d.ellipse((pad - r - w, pad - r - w, pad + r + w, pad + r + w), outline=(0, 0, 0, int(55 * a)), width=w + 2)
+    d.ellipse((pad - r, pad - r, pad + r, pad + r), outline=CLICK_FILL + (int(235 * a),), width=w)
+    frame.alpha_composite(layer, (int(L.click[0]) - pad, int(L.click[1]) - pad))
 
 
 def paste(frame, L, t):
