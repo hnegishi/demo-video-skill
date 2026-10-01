@@ -353,15 +353,26 @@ def draw_lines(d, x, y, lines, font, lh, gap, fill, center_w=None):
         d.text((lx, y + i * (lh + gap)), l, font=font, fill=fill)
 
 
+SS = 4  # supersampling factor for shapes: ImageDraw has no anti-aliasing, so draw big and shrink
+
+
+def antialiased(size, draw):
+    """Anti-aliased shapes: call draw(d, s) on an SS-times larger canvas (scale coordinates by s),
+    then downsample. Premultiplied resize avoids dark fringes on semi-transparent edges."""
+    w, h = max(1, int(size[0])), max(1, int(size[1]))
+    big = Image.new("RGBA", (w * SS, h * SS), (0, 0, 0, 0))
+    draw(ImageDraw.Draw(big), SS)
+    return big.convert("RGBa").resize((w, h), Image.LANCZOS).convert("RGBA")
+
+
 def plate(lines, font, pad_x, pad_y, gap, colors, radius=None, border=None):
     bg, fg, edge = colors
     tw, th, lh = text_block(lines, font, gap)
     w, h = tw + pad_x * 2, th + pad_y * 2
-    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    d = ImageDraw.Draw(im)
-    d.rounded_rectangle((0, 0, w - 1, h - 1), radius=radius if radius is not None else max(2, round(CORNER * font.size / 30)),
-                        fill=bg, outline=border or edge, width=2)
-    draw_lines(d, pad_x, pad_y, lines, font, lh, gap, fg, center_w=tw)
+    rad = radius if radius is not None else max(2, round(CORNER * font.size / 30))
+    im = antialiased((w, h), lambda d, s: d.rounded_rectangle((0, 0, w * s - 1, h * s - 1), radius=rad * s, fill=bg,
+                                                          outline=border or edge, width=2 * s))
+    draw_lines(ImageDraw.Draw(im), pad_x, pad_y, lines, font, lh, gap, fg, center_w=tw)
     return im
 
 
@@ -562,13 +573,15 @@ def render_box(it, u, layout, t0, t1):
     fy0 = min(y0, ty) if tag else y0
     fx1 = max(x0 + bw, tx + tag.width) if tag else x0 + bw
     fy1 = max(y0 + bh, ty + tag.height) if tag else y0 + bh
-    im = Image.new("RGBA", (int(fx1 - fx0) + stroke * 2, int(fy1 - fy0) + stroke * 2), (0, 0, 0, 0))
-    d = ImageDraw.Draw(im)
     ox, oy = stroke - fx0, stroke - fy0
-    # dark halo under the red stroke keeps it visible on red/pink UIs too
-    d.rounded_rectangle((x0 + ox, y0 + oy, x0 + bw + ox, y0 + bh + oy), radius=max(2, int(CORNER * u)),
-                        outline=(0, 0, 0, 110), width=stroke + 2)
-    d.rounded_rectangle((x0 + ox, y0 + oy, x0 + bw + ox, y0 + bh + oy), radius=max(2, int(CORNER * u)), outline=ACCENT, width=stroke)
+    rad = max(2, CORNER * u)
+
+    def outline(d, s):
+        r = ((x0 + ox) * s, (y0 + oy) * s, (x0 + bw + ox) * s, (y0 + bh + oy) * s)
+        # dark halo under the red stroke keeps it visible on red/pink UIs too
+        d.rounded_rectangle(r, radius=rad * s, outline=(0, 0, 0, 110), width=(stroke + 2) * s)
+        d.rounded_rectangle(r, radius=rad * s, outline=ACCENT, width=stroke * s)
+    im = antialiased((int(fx1 - fx0) + stroke * 2, int(fy1 - fy0) + stroke * 2), outline)
     if tag:
         im.alpha_composite(tag, (int(tx + ox), int(ty + oy)))
     fallback = None
@@ -620,11 +633,11 @@ def render_callout(it, u, layout, t0, t1):
     r = max(4, int(6 * u))
     x0, y0 = min(bx, px - r), min(by, py - r)
     x1, y1 = max(bx + bw, px + r), max(by + bh, py + r)
-    im = Image.new("RGBA", (int(x1 - x0) + 2, int(y1 - y0) + 2), (0, 0, 0, 0))
-    d = ImageDraw.Draw(im)
-    d.line((sx - x0, sy - y0, px - x0, py - y0), fill=ACCENT, width=max(2, int(3 * u)))
-    d.ellipse((px - x0 - r, py - y0 - r, px - x0 + r, py - y0 + r), fill=ACCENT, outline=(255, 255, 255, 255),
-              width=max(1, int(2 * u)))
+    def stem_and_dot(d, s):
+        d.line(((sx - x0) * s, (sy - y0) * s, (px - x0) * s, (py - y0) * s), fill=ACCENT, width=round(max(2, 3 * u) * s))
+        d.ellipse(((px - x0 - r) * s, (py - y0 - r) * s, (px - x0 + r) * s, (py - y0 + r) * s), fill=ACCENT,
+                  outline=(255, 255, 255, 255), width=round(max(1, 2 * u) * s))
+    im = antialiased((int(x1 - x0) + 2, int(y1 - y0) + 2), stem_and_dot)
     im.alpha_composite(bubble, (int(bx - x0), int(by - y0)))
     return im, int(x0), int(y0)
 
@@ -640,13 +653,18 @@ def draw_click(frame, L, t, u):
     grow = 1 - (1 - q) ** 3                          # ease-out: quick burst, then settles
     r = (6 + 30 * grow) * u
     a = 1 - q                                        # fades linearly to nothing
-    w = max(1, round(2 * u))
+    w = max(1.0, 2 * u)
+    x, y = L.click
     pad = int(r + 3 * w) + 2
-    layer = Image.new("RGBA", (pad * 2, pad * 2), (0, 0, 0, 0))
-    d = ImageDraw.Draw(layer)
-    d.ellipse((pad - r - w, pad - r - w, pad + r + w, pad + r + w), outline=(0, 0, 0, int(55 * a)), width=w + 2)
-    d.ellipse((pad - r, pad - r, pad + r, pad + r), outline=CLICK_FILL + (int(235 * a),), width=w)
-    frame.alpha_composite(layer, (int(L.click[0]) - pad, int(L.click[1]) - pad))
+    left, top = int(x) - pad, int(y) - pad
+    cx, cy = x - left, y - top  # sub-pixel center inside the layer, so the ring grows smoothly
+
+    def ring(d, s):
+        R, W = r * s, w * s
+        d.ellipse(((cx - r - w) * s, (cy - r - w) * s, (cx + r + w) * s, (cy + r + w) * s),
+                  outline=(0, 0, 0, int(55 * a)), width=round(W + 2 * s))
+        d.ellipse((cx * s - R, cy * s - R, cx * s + R, cy * s + R), outline=CLICK_FILL + (int(235 * a),), width=round(W))
+    frame.alpha_composite(antialiased((pad * 2, pad * 2), ring), (left, top))
 
 
 def paste(frame, L, t):
@@ -755,7 +773,7 @@ def main():
     enc = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
                             "-s", f"{W}x{H}", "-r", f"{fps:.6f}", "-i", "-", "-i", src,
                             "-map", "0:v", "-map", "1:a?", "-c:a", "copy",
-                            "-c:v", "libx264", "-crf", "20", "-preset", "medium", "-pix_fmt", "yuv420p",
+                            "-c:v", "libx264", "-crf", "18", "-preset", "medium", "-pix_fmt", "yuv420p",
                             "-movflags", "+faststart", dst], stdin=subprocess.PIPE)
     n = 0
     for buf in read_frames(src, W, H):
