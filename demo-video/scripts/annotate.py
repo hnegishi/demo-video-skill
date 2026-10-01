@@ -31,7 +31,7 @@ Coordinates are input-video pixels; times are seconds; "end" may be omitted (= e
            emptiest side.
   callout  speech bubble about a target rect (x, y, w, h) - or a point (x, y) - placed beside the
            target on the emptiest side, never on top of it, with a stem pointing at it.
-  click    translucent yellow disc at (x, y) that pops in, presses and fades (~0.5s).
+  click    simple translucent white disc at (x, y) that pops in, presses and fades (~0.5s).
   zoom     smoothly zooms into rect (x, y, w, h) from "start", holds, and zooms back out after "end".
            The rect is expanded to the video's aspect ratio. "ease" (default 0.6s) sets the
            transition length. Consecutive zooms pan directly from one rect to the next.
@@ -63,7 +63,7 @@ from jpfont import load_font  # noqa: E402
 ACCENT = (255, 72, 72, 255)
 FADE = 0.2
 CLICK_DUR = 0.5
-CLICK_FILL = (255, 196, 0)    # classic screen-recorder click highlight: translucent yellow disc
+CLICK_FILL = (255, 255, 255)  # simple translucent white disc, with a faint shadow so it reads on white UIs
 CORNER = 6                    # corner radius of plates/boxes at 720p (small: reads as a label, not a pill)
 SAMPLE_FPS = 4
 SAMPLE_DIV = 4          # layout analysis runs on 1/4-size frames
@@ -630,8 +630,9 @@ def render_callout(it, u, layout, t0, t1):
 
 
 def draw_click(frame, L, t, u):
-    """Translucent disc under the cursor that pops in, 'presses' (shrinks a little) and fades.
-    Translucent so the button label underneath stays readable."""
+    """Simple white disc under the cursor that pops in, 'presses' (shrinks a little) and fades.
+    Translucent so the button label underneath stays readable; a faint soft shadow keeps it visible
+    on white backgrounds."""
     dt = t - L.start
     if not 0 <= dt < CLICK_DUR:
         return
@@ -644,11 +645,18 @@ def draw_click(frame, L, t, u):
         k, a = 0.82 + 0.08 * smooth(q), 1 - smooth(q)
     x, y = L.click
     r = 22 * u * k
-    pad = int(r) + 4
+    pad = int(r + 8 * u) + 2
     layer = Image.new("RGBA", (pad * 2, pad * 2), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
-    d.ellipse((pad - r, pad - r, pad + r, pad + r), fill=CLICK_FILL + (int(115 * a),),
-              outline=(200, 140, 0, int(170 * a)), width=max(1, int(2 * u)))
+    sr = r + 1.5 * u
+    d.ellipse((pad - sr, pad - sr, pad + sr, pad + sr), fill=(0, 0, 0, int(70 * a)))
+    layer = layer.filter(ImageFilter.GaussianBlur(3 * u))
+    d = ImageDraw.Draw(layer)
+    # punch the shadow out under the disc so it doesn't darken the clicked element
+    d.ellipse((pad - r, pad - r, pad + r, pad + r), fill=(0, 0, 0, 0))
+    disc = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+    ImageDraw.Draw(disc).ellipse((pad - r, pad - r, pad + r, pad + r), fill=CLICK_FILL + (int(150 * a),))
+    layer.alpha_composite(disc)
     frame.alpha_composite(layer, (int(x) - pad, int(y) - pad))
 
 

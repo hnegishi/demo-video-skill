@@ -60,7 +60,7 @@ export default async ({ page, demo }) => {
 | 関数 | 動作 |
 |---|---|
 | `demo.start()` | 録画の実質的な開始点を記録する。これより前は MP4 からトリムされる |
-| `demo.click(target, {pauseAfter, effect})` | カーソルを滑らかに移動してクリックする。クリックエフェクト（黄色の半透明の円）が付く。`effect: false` で消せる |
+| `demo.click(target, {pauseAfter, effect})` | カーソルを滑らかに移動してクリックする。クリックエフェクト（白い半透明の円）が付く。`effect: false` で消せる |
 | `demo.type(target, text, {delay})` | 入力欄をクリックして 1 文字ずつ入力する（既定 70ms/文字）。最初のクリックにエフェクトが付く |
 | `demo.zoomTo(target, {pad, ease, maxScale})` | 要素（配列で複数指定可）に滑らかにズームし、`zoomOut()` か次の `zoomTo()` まで保つ。ズームし終わるまで待つ。既定は余白 24px、0.6 秒、最大 2.5 倍 |
 | `demo.zoomOut({ease})` | ズームを戻す |
