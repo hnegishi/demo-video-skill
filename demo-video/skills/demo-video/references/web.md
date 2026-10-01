@@ -43,6 +43,7 @@ export default async ({ page, demo }) => {
   await demo.zoomTo([page.getByPlaceholder('やること'), page.getByRole('button', { name: '追加' })]);  // 入力欄に寄る
   await demo.type(page.getByPlaceholder('やること'), '牛乳を買う');
   await demo.click(page.getByRole('button', { name: '追加' }));   // クリックエフェクトは自動
+  await demo.hideCaption();                                        // 引く前にテロップを閉じる（下記）
   await demo.zoomOut();                                            // 結果は全体で見せる
   await demo.pause(800);
 
@@ -69,7 +70,7 @@ export default async ({ page, demo }) => {
 | `demo.caption(text, ms, {position})` | テロップを出し、`ms` だけ待つ（`ms=0` なら待たずに次へ）。次の `caption` か `hideCaption` まで表示される。置き場所は空いている所に自動で決まる（下部中央を優先）。`{position: 'top'}` などで固定もできる |
 | `demo.hideCaption()` | テロップを消す |
 | `demo.title(text, {sub, ms})` | 画面を暗くして中央に大きなタイトルを出す |
-| `demo.box(target, {label, ms})` | 要素を赤枠で囲む（ラベル付き可）。配列を渡すと全体を囲む（例: 表示中の行だけ `page.locator('li').all()`） |
+| `demo.box(target, {label, ms})` | 要素を赤枠で囲む（ラベル付き可）。配列を渡すと全体を囲む（例: 表示中の行だけ `await page.locator('li').all()`。`all()` は Promise を返すので `await` が要る） |
 | `demo.callout(target, text, {ms})` | 要素の横の空いた場所に吹き出しを出す。配列も可 |
 | `demo.pause(ms)` | 待つ |
 
@@ -86,6 +87,7 @@ export default async ({ page, demo }) => {
 
 - **間を取る。** 操作直後に次の操作へ進むと、見る側が追いつけない。結果が画面に出たら 0.8〜1.5 秒待つ。テロップは「文字数 × 0.1 秒 + 1 秒」程度を目安に表示する。
 - **テロップは操作の直前に出す。** `caption(text, 0)` で出してすぐ操作すると、何をするかを読んでから動きを見られる。
+- **ズームの前後でテロップを分ける。** 寄っている間と引いた後では、画面の空き場所がまったく違う。1 本のテロップをズーム中から引いた後まで出し続けると、どちらでも重ならない場所が見つからず、`[annotate] band`（映像を縮めて帯を作る）になりやすい。`zoomOut()` の直前に `hideCaption()` するか、引いた後に次の `caption()` を出す。
 - **テロップと UI が重なるなら** `{position: 'top'}` にするか、ページ側の余白を CSS で調整する。
 - **`box` のラベルは枠の左上の外側に出る。** 枠のすぐ上に別の要素があると重なるので、`pad` で枠を広げるか、ラベルなしにして `callout` で説明する。
 - **文字を大きくする。** 小さいアプリを 1280x720 で録ると文字が読めない。`page.evaluate(() => document.body.style.zoom = '1.3')` で拡大するか、ビューポートを小さくする（`--width 960 --height 540`）。ただし拡大しすぎて画面の下端までアプリが埋まると、テロップの置き場所がなくなり `[annotate] band`（映像を縮めて帯を作る）が毎回出る。画面の下に 120px 程度の空きが残る倍率にとどめ、細部はズーム（`zoomTo`）で見せる。

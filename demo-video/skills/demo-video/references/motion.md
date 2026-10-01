@@ -11,10 +11,10 @@
    node -e "
    const {chromium}=require(require('os').homedir()+'/.cache/demo-video-skill/node_modules/playwright');
    (async()=>{const b=await chromium.launch({channel:'chrome'});const p=await b.newPage({viewport:{width:1280,height:720}});
-   for (const t of [1,4,8]) { await p.goto('file://'+process.cwd()+'/motion.html?t='+t); await p.waitForTimeout(300); await p.screenshot({path:'preview-'+t+'.png'}); }
+   for (const t of [1,4,8]) { await p.goto('file://'+process.cwd()+'/motion.html?t='+t); await p.waitForTimeout(700); await p.screenshot({path:'preview-'+t+'.png'}); }
    await b.close();})()"
    ```
-   （`~/.cache/demo-video-skill` は `record_web.mjs` を一度実行すると作られる。）レイアウトが崩れていないか、文字がはみ出していないかを Read で確認する。
+   （`motion.html` のあるディレクトリで実行する。`~/.cache/demo-video-skill` は `record_web.mjs` を一度実行すると作られる。700ms 待つのは、テンプレートのフェード（0.5 秒）が終わる前に撮ると半透明の画面が写るため。）レイアウトが崩れていないか、文字がはみ出していないかを Read で確認する。
 4. **録画する。** HTML を渡すと、ページは `window.__demoDone = true` になるか `--duration` 秒（既定 60）が経つまで録画される。
    ```bash
    node <skill>/scripts/record_web.mjs motion.html --out docs/demo/overview.mp4 --duration 30
