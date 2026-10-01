@@ -76,18 +76,29 @@ const OVERLAY = () => {
       @keyframes __demo_tick { to { opacity: .99 } }
       #__demo_tick { position: fixed; left: 0; top: 0; width: 1px; height: 1px; opacity: .01;
         animation: __demo_tick .1s infinite alternate; pointer-events: none; z-index: 2147483647; }
+      #__demo_sync { position: fixed; left: 0; top: 0; width: 4px; height: 4px; background: transparent;
+        pointer-events: none; z-index: 2147483647; }
       #__demo_cursor { position: fixed; left: 0; top: 0; width: 22px; height: 22px; z-index: 2147483647;
         pointer-events: none; transform: translate(-100px, -100px); transition: none; }
 `;
     const root = document.createElement('div');
     root.id = '__demo_overlay';
-    root.innerHTML = `<div id="__demo_tick"></div>
+    root.innerHTML = `<div id="__demo_tick"></div><div id="__demo_sync"></div>
       <svg id="__demo_cursor" viewBox="0 0 24 24"><path d="M3 2l7 19 2.5-7.5L20 11z"
         fill="#111" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
     document.documentElement.append(style, root);
     const cursor = root.querySelector('#__demo_cursor');
     document.addEventListener('mousemove', (e) => {
       cursor.style.transform = `translate(${e.clientX - 3}px, ${e.clientY - 2}px)`;
+    }, true);
+    // Sync marker: a 4px magenta square in the corner on every mousedown. Its frames in the video
+    // tell exactly when each click became visible, so annotation times can be lined up per run
+    // (wall-clock -> video offset varies by up to ~0.2s between runs). It is painted over when the
+    // video is converted, so it never shows in the output.
+    const sync = root.querySelector('#__demo_sync');
+    document.addEventListener('mousedown', () => {
+      sync.style.background = '#ff00ff';
+      setTimeout(() => { sync.style.background = 'transparent'; }, 150);
     }, true);
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install);
@@ -134,7 +145,9 @@ function makeDemo(page, state) {
       const { x, y } = await center(target);
       await moveTo(x, y);
       await page.waitForTimeout(150);
-      if (effect) state.annotations.push({ type: 'click', start: now(), x: Math.round(x), y: Math.round(y) });
+      const t = now();
+      state.mousedowns.push(t);
+      if (effect) state.annotations.push({ type: 'click', start: t, x: Math.round(x), y: Math.round(y) });
       await page.mouse.click(x, y);
       await page.waitForTimeout(pauseAfter);
     },
@@ -147,7 +160,9 @@ function makeDemo(page, state) {
     async type(target, text, { delay = 70, pauseAfter = 400 } = {}) {
       const { loc, x, y } = await center(target);
       await moveTo(x, y);
-      state.annotations.push({ type: 'click', start: now(), x: Math.round(x), y: Math.round(y) });
+      const t = now();
+      state.mousedowns.push(t);
+      state.annotations.push({ type: 'click', start: t, x: Math.round(x), y: Math.round(y) });
       await page.mouse.click(x, y);
       await loc.pressSequentially(text, { delay });
       await page.waitForTimeout(pauseAfter);
@@ -233,7 +248,7 @@ await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => request
 const flashAt = Date.now();
 await page.waitForTimeout(300);
 await page.setContent('<body style="margin:0;background:#fff"></body>');
-const state = { width: args.width, height: args.height, startAt: undefined, annotations: [] };
+const state = { width: args.width, height: args.height, startAt: undefined, annotations: [], mousedowns: [] };
 const demo = makeDemo(page, state);
 
 let failed = null;
@@ -284,14 +299,39 @@ function findFlash(file) {
 const flashVideoT = findFlash(webm);
 if (flashVideoT === null) console.error('[record_web] warning: sync flash not found; annotation timing may be ~0.3s late');
 const anchorVideoT = flashVideoT ?? (flashAt - recordStart) / 1000;
-const trim = state.startAt ? Math.max(0, anchorVideoT + (state.startAt - flashAt) / 1000) : 0;
+const flashTrim = state.startAt ? anchorVideoT + (state.startAt - flashAt) / 1000 : 0;
+
+// Onsets of the corner sync marker (one per mousedown), sampled at 100fps.
+function findMarkers(file) {
+  const raw = execFileSync('ffmpeg', ['-v', 'error', '-i', file, '-vf', 'fps=100,crop=2:2:1:1',
+    '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { maxBuffer: 256 * 1024 * 1024 });
+  const fb = 2 * 2 * 3, out = [];
+  let on = false;
+  for (let i = 0; i + fb <= raw.length; i += fb) {
+    const hit = raw[i] > 200 && raw[i + 1] < 80 && raw[i + 2] > 200;
+    if (hit && !on) out.push(i / fb / 100);
+    on = hit;
+  }
+  return out;
+}
+// Per-run calibration: trim so that each recorded mousedown lands on its marker. Falls back to the
+// startup flash when there were no clicks (e.g. motion mode).
+let trim = flashTrim;
+const markers = state.startAt ? findMarkers(webm) : [];
+const fits = state.mousedowns.filter((a) => a >= 0).map((a) => {
+  const near = markers.reduce((b, m) => (Math.abs(m - (a + flashTrim)) < Math.abs(b - (a + flashTrim)) ? m : b), Infinity);
+  return Math.abs(near - (a + flashTrim)) < 0.6 ? near - a : null;
+}).filter((v) => v !== null).sort((x, y) => x - y);
+if (fits.length) trim = fits[Math.floor(fits.length / 2)];
+trim = Math.max(0, trim);
 fs.mkdirSync(path.dirname(path.resolve(args.out)), { recursive: true });
 const annotations = state.annotations.filter((a) => a.type === 'click' || a.end === null || a.end > a.start);
 const base = args.out.replace(/\.\w+$/, '');
 const plain = annotations.length ? `${base}.plain.mp4` : args.out;
 execFileSync('ffmpeg', [
   '-v', 'error', '-y', '-ss', trim.toFixed(2), '-i', webm,
-  '-vf', 'fps=30,format=yuv420p', '-c:v', 'libx264', '-crf', annotations.length ? '14' : '20', '-preset', 'medium',
+  // paint over the 4px sync marker with the pixels right next to it
+  '-vf', 'split[a][b];[b]crop=4:4:4:0[p];[a][p]overlay=0:0,fps=30,format=yuv420p', '-c:v', 'libx264', '-crf', annotations.length ? '14' : '20', '-preset', 'medium',
   '-movflags', '+faststart', plain,
 ]);
 if (annotations.length) {
@@ -307,5 +347,6 @@ if (annotations.length) {
 }
 if (args.keepWebm) fs.copyFileSync(webm, args.out.replace(/\.\w+$/, '') + '.webm');
 fs.rmSync(tmpDir, { recursive: true, force: true });
-console.log(`[record_web] wrote ${args.out} (trimmed ${trim.toFixed(2)}s lead-in)`);
+console.log(`[record_web] wrote ${args.out} (trimmed ${trim.toFixed(2)}s lead-in; ` +
+  `${fits.length ? `synced on ${fits.length} clicks` : 'synced on start flash'})`);
 if (failed) process.exit(1);

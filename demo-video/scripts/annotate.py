@@ -635,8 +635,8 @@ def draw_click(frame, L, t, u):
     dt = t - L.start
     if not 0 <= dt < CLICK_DUR:
         return
-    if dt < 0.08:                                   # pop in
-        k, a = 0.7 + 0.3 * smooth(dt / 0.08), smooth(dt / 0.08)
+    if dt < 0.08:                                   # pop in: visible from the very first frame,
+        k, a = 0.85 + 0.15 * smooth(dt / 0.08), 0.75 + 0.25 * smooth(dt / 0.08)  # so it isn't late
     elif dt < 0.2:                                  # press
         k, a = 1.0 - 0.18 * smooth((dt - 0.08) / 0.12), 1.0
     else:                                           # release + fade
